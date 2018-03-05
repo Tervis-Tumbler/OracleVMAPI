@@ -1,29 +1,3 @@
-function invoke-OVMAPIRequest {
-    $URI= "https://inf-ovmmanager01/ovm/core/wsapi/soap"
-    
-    
-    
-    
-    $username = 'admin'  
-    $password = ''
-    $target = "Daily Whatsis Roundup"  
-    
-    $hdrs = @{"X-Requested-With"="powershell"}  
-    $base = "https://qualysapi.qualys.com/api/2.0/fo"  
-    $body = "action=login&username=$username&password=$password"  
-    Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess
-    
-    
-    
-    $username = "username"  
-    $password = "password"  
-    $password_base64 = ConvertTo-SecureString $password -AsPlainText -Force  
-    $creds = New-Object System.Management.Automation.PSCredential ($username, $password_base64)  
-    $headers = @{"X-Requested-With"="powershell"}  
-    $url = "https://qualysapi.qualys.com/about.php"  
-    Invoke-RestMethod -Headers $headers -Uri $url -Method 
-}
-
 function Invoke-OracleVMManagerAPICall{
     param(
         [parameter(ValueFromPipelineByPropertyName,Mandatory)]$Method,
