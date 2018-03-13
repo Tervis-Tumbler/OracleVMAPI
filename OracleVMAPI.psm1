@@ -58,7 +58,7 @@ function Get-OVMVirtualMachines {
                 $VMListing | where name -eq $Name
             }
             else {
-                #$VMListing
+                $VMListing
             }
         }
     }
@@ -73,6 +73,15 @@ function Invoke-OVMSendMessagetoVM {
         Invoke-OracleVMManagerAPICall -Method put `
         -URIPath "/Vm/$VMID/sendMessage?logFlag=Yes" `
         -InputJSON $JSON
+    }
+}
+
+function Get-OVMMessagesFromVM {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID
+    )
+    process{
+        Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Vm/$VMID/messages"
     }
 }
 
@@ -125,9 +134,10 @@ function New-OVMVirtualMachineClone {
             $CloneJob = Get-OVMJob -JobID $CloneResult.id.value
         }while($CloneJob.done -eq $false)
         $ClonedVirtualMachine = Get-OVMVirtualMachines -ID $CloneJob.resultId.value    
+        New-OVMVirtualNIC -VMID $ClonedVirtualMachine.id.value
         Start-OVMVirtualMachine -VMID $ClonedVirtualMachine.id.value
-
-        #####Wait for system to boot#####
+        New-OVMVirtualMachineConsole -Name $ClonedVirtualMachine.id.name
+        Start-Sleep -Seconds 60
 
         $InitialConfigJSON = [pscustomobject][ordered]@{
             key = "com.oracle.linux.network.bootproto.0"
@@ -279,13 +289,33 @@ function Stop-OVMVirtualMachine {
 }
 
 function New-OVMVirtualMachineConsole {
+    [CmdletBinding()]
     param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID
     )
+    DynamicParam {
+        $ParameterName = 'Name'
+        $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+        $AttributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
+        $ParameterAttribute = New-Object System.Management.Automation.ParameterAttribute
+        $ParameterAttribute.Mandatory = $true
+        $ParameterAttribute.Position = 4
+        $AttributeCollection.Add($ParameterAttribute)
+        $arrSet = Get-OVMVirtualMachines | where vmRunState -ne "TEMPLATE" | select name -ExpandProperty name
+        $ValidateSetAttribute = New-Object System.Management.Automation.ValidateSetAttribute($arrSet)
+        $AttributeCollection.Add($ValidateSetAttribute)
+        $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
+        $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
+        return $RuntimeParameterDictionary
+    }
+    begin {
+        $Name = $PsBoundParameters[$ParameterName]
+    }
+
     process{
         $OVMManagerPasswordstateEntryDetails = Get-PasswordstateEntryDetails -PasswordID 4157
+        $VM = Get-OVMVirtualMachines -Name $Name
         $ConsoleURLPath = Invoke-OracleVMManagerAPICall -Method GET `
-        -URIPath "/Vm/$VMID/vmConsoleUrl"
+        -URIPath "/Vm/$($VM.id.value)/vmConsoleUrl"
         $ConsoleURL = "https://" + ([System.Uri]$OVMManagerPasswordstateEntryDetails.url).Authority + $ConsoleURLPath
         Start-Process -filePath $ConsoleURL
     }
@@ -294,8 +324,8 @@ function New-OVMVirtualMachineConsole {
 function Get-OVMNetwork {
     [CmdletBinding(DefaultParameterSetName="__AllParameterSets")]
     param(
-        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="Name")]$Name,
-        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
+        [parameter(ValueFromPipelineByPropertyName,ParameterSetName="Name")]$Name,
+        [parameter(ValueFromPipelineByPropertyName,ParameterSetName="ID")]$ID
     )
     process{
         if ($ID){
@@ -310,5 +340,55 @@ function Get-OVMNetwork {
                 $NetworkList
             }
         }
+    }
+}
+
+function New-OVMVirtualNIC {
+    [CmdletBinding()]
+    param(
+        [parameter(ValueFromPipelineByPropertyName,Mandatory)]$VMID
+#        [parameter(ValueFromPipelineByPropertyName,Mandatory)]$NetworkName,
+    )
+        DynamicParam {
+            $ParameterName = 'Network'
+            $RuntimeParameterDictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+            $AttributeCollection = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
+            $ParameterAttribute = New-Object System.Management.Automation.ParameterAttribute
+            $ParameterAttribute.Mandatory = $true
+            $ParameterAttribute.Position = 4
+            $AttributeCollection.Add($ParameterAttribute)
+            $arrSet = Get-OVMNetwork | select Name -ExpandProperty Name
+            $ValidateSetAttribute = New-Object System.Management.Automation.ValidateSetAttribute($arrSet)
+            $AttributeCollection.Add($ValidateSetAttribute)
+            $RuntimeParameter = New-Object System.Management.Automation.RuntimeDefinedParameter($ParameterName, [string], $AttributeCollection)
+            $RuntimeParameterDictionary.Add($ParameterName, $RuntimeParameter)
+            return $RuntimeParameterDictionary
+    }
+    begin {
+        $NetworkName = $PsBoundParameters[$ParameterName]
+    }
+    process{
+        $NewVMNICObject = [pscustomobject][ordered]@{
+            name = $NetworkName
+            description = ""
+            networkId = [pscustomobject][ordered]@{
+                type = $vmnetwork.id.type
+                value = $vmnetwork.id.value
+                uri = $vmnetwork.id.uri
+                name = $vmnetwork.id.name
+            }
+        }
+        $JSON = $NewVMNICObject | convertto-json
+    
+        $NewVMNICJob = Invoke-OracleVMManagerAPICall -Method POST -URIPath "/Vm/$VMID/VirtualNic"  -InputJSON $Json
+        $NewVMNICJobresult = Get-OVMJob -JobID $NewVMNICJob.id.value
+        $NewVMNICJobresult
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $NewVMNICJobresult.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        $ResultantJob
     }
 }
