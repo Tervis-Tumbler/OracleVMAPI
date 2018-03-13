@@ -29,16 +29,16 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
     }
     process{
         if($Method -eq "GET"){
-            Invoke-RestMethod -Uri $URL -Method Get -Headers $headers -UseBasicParsing -verbose
+            Invoke-RestMethod -Uri $URL -Method Get -Headers $headers -UseBasicParsing #-verbose
         }
         if($Method -eq "PUT"){
-            Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $InputJSON -UseBasicParsing -verbose
+            Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
         }
         if($Method -eq "POST"){
-            Invoke-RestMethod -Uri $url -Method POST -Headers $headers -Body $InputJSON -UseBasicParsing -verbose
+            Invoke-RestMethod -Uri $url -Method POST -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
         }
         if($Method -eq "DELETE"){
-            Invoke-RestMethod -Uri $url -Method DELETE -Headers $headers -Body $InputJSON -UseBasicParsing -verbose
+            Invoke-RestMethod -Uri $url -Method DELETE -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
         }
     }
 }
@@ -92,13 +92,17 @@ function Get-OVMJob {
         [parameter(ValueFromPipelineByPropertyName,ParameterSetName="AllJobs")]$EndTime,
         [parameter(ValueFromPipelineByPropertyName,ParameterSetName="AllJobs")]$MaxJobs,
         [parameter(ValueFromPipelineByPropertyName,ParameterSetName="ActiveJobs")][switch]$Active,
-        [parameter(ValueFromPipelineByPropertyName,ParameterSetName="ByID")][switch]$Transcript
+        [parameter(ValueFromPipelineByPropertyName,ParameterSetName="ByID")][switch]$WaitToComplete
     )
     process{
         if ($PSCmdlet.ParameterSetName -eq "ByID"){
             $URIPath = "/Job/$JobID"
-            if($Transcript){
-                $URIPath += "/transcript"
+            if($WaitToComplete){
+                do{
+                    $Job = Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
+                    Write-Progress -Activity $Job.name -status $Job.jobRunState
+                    Start-Sleep 1
+                }while($Job.done -eq $false)
             }
         }
         if ($PSCmdlet.ParameterSetName -eq "AllJobs"){
