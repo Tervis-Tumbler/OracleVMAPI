@@ -107,24 +107,39 @@ function Get-OVMJob {
         }
         if ($PSCmdlet.ParameterSetName -eq "AllJobs"){
             $URIPath = "/Job/id?startTime=$StartTime&endTime=$EndTime&maxJobs=$MaxJobs"
+            Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
         }
         if ($PSCmdlet.ParameterSetName -eq "ActiveJobs"){
             $URIPath = "/Job/active"
+            Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
         }
-        Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
+        
     }
 }
 
 function New-OVMVirtualMachineClone {
     param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$TemplateID,
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$Name,
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$ServerPoolID,
-        [parameter(ValueFromPipelineByPropertyName)]$RepositoryID,
-        [parameter(ValueFromPipelineByPropertyName)]$VMCloneDefinitionID
+#        [Parameter(Mandatory)]
+#        [ValidateLength(1,11)]
+#        [ValidateScript({ Test-ShouldBeAlphaNumeric -Name VMNameWithoutEnvironmentPrefix -String $_ })]
+        [String]$VMNameWithoutEnvironmentPrefix,
+
+#        [Parameter(Mandatory)]
+#        [ValidateSet(“Windows Server 2012 R2”,"Windows Server 2012","Windows Server 2008 R2", "PerfSonar", "CentOS 7","Windows Server 2016","VyOS","Arch Linux")]
+        [String]$VMOperatingSystemTemplateName,
+        
+#        [Parameter(Mandatory)]
+#        [ValidateSet(”Delta”,“Epsilon”,"Production","Infrastructure")]
+#        [ValidateScript({$_ -in $(Get-TervisEnvironmentName) })]
+        [String]$EnvironmentName
     )
     process{
-        $URIPath = "/Vm/$TemplateID/clone?serverPoolId=$ServerPoolID&createTemplate=false"
+        $ServerPoolID = "0004fb000002000029e778af2539d7ca"
+        $VMTemplate = Get-OVMVirtualMachines -Name $TervisApplicationDefinition.$VMOperatingSystemTemplateName
+        $VMTemplateId = $VMTemplate.id.value
+        $VMName = Get-TervisVMName -VMNameWithoutEnvironmentPrefix $VMNameWithoutEnvironmentPrefix
+        
+        $URIPath = "/Vm/$VMTemplateID/clone?serverPoolId=$ServerPoolID&createTemplate=false"
         
         if($RepositoryID){
             $URIPath += "&repositoryId=$RepositoryID"
@@ -132,43 +147,11 @@ function New-OVMVirtualMachineClone {
         if($VMCloneDefinitionID){
             $URIPath += "&vmCloneDefinitionId=$VMCloneDefinitionID&createTemplate=false"
         }
-        $CloneResult = Invoke-OracleVMManagerAPICall -Method PUT -URIPath $URIPath
-        do{
-            Start-Sleep 1
-            $CloneJob = Get-OVMJob -JobID $CloneResult.id.value
-        }while($CloneJob.done -eq $false)
-        $ClonedVirtualMachine = Get-OVMVirtualMachines -ID $CloneJob.resultId.value    
-        New-OVMVirtualNIC -VMID $ClonedVirtualMachine.id.value
-        Start-OVMVirtualMachine -VMID $ClonedVirtualMachine.id.value
-        New-OVMVirtualMachineConsole -Name $ClonedVirtualMachine.id.name
-        Start-Sleep -Seconds 60
-
-        $InitialConfigJSON = [pscustomobject][ordered]@{
-            key = "com.oracle.linux.network.bootproto.0"
-            value = "dhcp"
-        },
-        [pscustomobject][ordered]@{
-            key = "com.oracle.linux.network.onboot.0"
-            value = "yes"
-        },
-        [pscustomobject][ordered]@{
-            key = "com.oracle.linux.network.device.0"
-            value = "eth0"
-        },
-        [pscustomobject][ordered]@{
-            key = "com.oracle.linux.root-password"
-            value = $RootPassword
-        },
-        [pscustomobject][ordered]@{
-            key = "com.oracle.linux.network.hostname"
-            value = "$Hostname"
-        },
-        [pscustomobject][ordered]@{
-            key = "com.oracle.linux.network.host.0"
-            value = $Hostname
-        } | convertto-json
-        Invoke-OVMSendMessagetoVM -VMID $vm.id.value -JSON $InitialConfigJSON
-    
+        $CloneJob = Invoke-OracleVMManagerAPICall -Method PUT -URIPath $URIPath
+        $CompletedCloneJob = Get-OVMJob -JobID $CloneJob.id.value -WaitToComplete
+        $ClonedVirtualMachine = Get-OVMVirtualMachines -ID $CompletedCloneJob.resultId.value    
+        Rename-OVMVirtualMachine -VMID $clonedvirtualmachine.id.value -NewName $VMName
+        $ClonedVirtualMachine
     }
 }
 
@@ -288,7 +271,7 @@ function Stop-OVMVirtualMachine {
     )
     process{
         Invoke-OracleVMManagerAPICall -Method put `
-        -URIPath "/Vm/$VMID/Stop" `
+        -URIPath "/Vm/$VMID/stop" `
     }
 }
 
@@ -394,5 +377,24 @@ function New-OVMVirtualNIC {
             }while($ResultantJob.done -eq $false)    
         }
         $ResultantJob
+    }
+}
+
+function Get-OVMVirtualNic {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VirtualNicID
+    )
+    process{
+        Invoke-OracleVMManagerAPICall -Method GET `
+        -URIPath "/VirtualNic/$VirtualNicID" `
+    }
+}
+
+function Get-OVMVirtualNicMacAddress {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VirtualNicID
+    )
+    process{
+        (Get-OVMVirtualNic -VirtualNicID $VirtualNicID).macAddress
     }
 }
