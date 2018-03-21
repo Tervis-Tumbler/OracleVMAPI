@@ -31,17 +31,12 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
         if($Method -eq "GET"){
             Invoke-RestMethod -Uri $URL -Method Get -Headers $headers -UseBasicParsing #-verbose
         }
-        if($Method -eq "PUT"){
-            Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
-        }
-        if($Method -eq "POST"){
-            Invoke-RestMethod -Uri $url -Method POST -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
-        }
-        if($Method -eq "DELETE"){
-            Invoke-RestMethod -Uri $url -Method DELETE -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
+        else{
+            Invoke-RestMethod -Uri $url -Method $Method -Headers $headers -Body $InputJSON -UseBasicParsing #-verbose
         }
     }
 }
+
 function Get-OVMVirtualMachines {
     [CmdletBinding(DefaultParameterSetName="__AllParameterSets")]
     param(
@@ -50,16 +45,11 @@ function Get-OVMVirtualMachines {
     )
     process{
         if ($ID){
-            Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Vm/$VMID"
+            Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Vm/$ID"
         }
         Else{
             $VMListing = Invoke-OracleVMManagerAPICall -Method get -URIPath "/Vm"
-            if ($Name){
-                $VMListing | where name -eq $Name
-            }
-            else {
-                $VMListing
-            }
+            $VMListing | where{-not $Name -or $_.name -eq $name}
         }
     }
 }
@@ -113,7 +103,7 @@ function Get-OVMJob {
             $URIPath = "/Job/active"
             Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
         }
-        
+        Invoke-OracleVMManagerAPICall -Method GET -URIPath $URIPath
     }
 }
 
@@ -257,21 +247,35 @@ function Remove-OVMVirtualDisk {
 
 function Start-OVMVirtualMachine {
     param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="Name")]$Name,
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
     )
     process{
-        Invoke-OracleVMManagerAPICall -Method put `
-        -URIPath "/Vm/$VMID/start" `
+        if ($ID){
+            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$ID/start"
+        }
+        Elseif($Name){
+            $VM = Get-OVMVirtualMachines | where name -eq $Name
+            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/start"
+        }
+        Get-OVMJob -JobID $Job.id.value -WaitToComplete
     }
 }
 
 function Stop-OVMVirtualMachine {
     param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="Name")]$Name,
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
     )
     process{
-        Invoke-OracleVMManagerAPICall -Method put `
-        -URIPath "/Vm/$VMID/stop" `
+        if ($ID){
+            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$VMID/stop"
+        }
+        Elseif($Name){
+            $VM = Get-OVMVirtualMachines | where name -eq $Name
+            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/stop"
+        }
+        Get-OVMJob -JobID $Job.id.value -WaitToComplete
     }
 }
 
@@ -319,13 +323,8 @@ function Get-OVMNetwork {
             Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Network/$ID"
         }
         Else{
-            $NetworkList = Invoke-OracleVMManagerAPICall -Method get -URIPath "/Network"
-            if ($Name){
-                $NetworkList | where name -eq $Name
-            }
-            else {
-                $NetworkList
-            }
+            $NetworkList = Invoke-OracleVMManagerAPICall -Method get -URIPath "/Network" 
+            $NetworkList | where{-not $Name -or $_.name -eq $name}
         }
     }
 }
@@ -334,7 +333,6 @@ function New-OVMVirtualNIC {
     [CmdletBinding()]
     param(
         [parameter(ValueFromPipelineByPropertyName,Mandatory)]$VMID
-#        [parameter(ValueFromPipelineByPropertyName,Mandatory)]$NetworkName,
     )
         DynamicParam {
             $ParameterName = 'Network'
@@ -355,6 +353,7 @@ function New-OVMVirtualNIC {
         $NetworkName = $PsBoundParameters[$ParameterName]
     }
     process{
+        $VMNetwork = Get-OVMNetwork -Name $NetworkName
         $NewVMNICObject = [pscustomobject][ordered]@{
             name = $NetworkName
             description = ""
@@ -369,14 +368,7 @@ function New-OVMVirtualNIC {
     
         $NewVMNICJob = Invoke-OracleVMManagerAPICall -Method POST -URIPath "/Vm/$VMID/VirtualNic"  -InputJSON $Json
         $NewVMNICJobresult = Get-OVMJob -JobID $NewVMNICJob.id.value
-        $NewVMNICJobresult
-        if(-not $ASync){
-            do{
-                Start-Sleep 1
-                $ResultantJob = Get-OVMJob -JobID $NewVMNICJobresult.id.value
-            }while($ResultantJob.done -eq $false)    
-        }
-        $ResultantJob
+        Get-OVMJob -JobID $NewVMNICJobresult.id.value -WaitToComplete
     }
 }
 
@@ -397,4 +389,9 @@ function Get-OVMVirtualNicMacAddress {
     process{
         (Get-OVMVirtualNic -VirtualNicID $VirtualNicID).macAddress
     }
+}
+
+function Get-OVMManagerStatus {
+    $Result = Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Manager" 
+    $Result | select Name,managerRunState,locked
 }
