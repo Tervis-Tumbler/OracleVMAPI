@@ -109,25 +109,27 @@ function Get-OVMJob {
 
 function New-OVMVirtualMachineClone {
     param(
-#        [Parameter(Mandatory)]
-#        [ValidateLength(1,11)]
-#        [ValidateScript({ Test-ShouldBeAlphaNumeric -Name VMNameWithoutEnvironmentPrefix -String $_ })]
+        [Parameter(Mandatory)]
+        [ValidateLength(1,11)]
+        [ValidateScript({ Test-ShouldBeAlphaNumeric -Name VMNameWithoutEnvironmentPrefix -String $_ })]
         [String]$VMNameWithoutEnvironmentPrefix,
 
 #        [Parameter(Mandatory)]
-#        [ValidateSet(“Windows Server 2012 R2”,"Windows Server 2012","Windows Server 2008 R2", "PerfSonar", "CentOS 7","Windows Server 2016","VyOS","Arch Linux")]
+#        [ValidateSet("Windows Server 2012 R2"�,"Windows Server 2012","Windows Server 2008 R2", "PerfSonar", "CentOS 7","Windows Server 2016","VyOS","Arch Linux","OEL-75-Template")]
         [String]$VMOperatingSystemTemplateName,
         
 #        [Parameter(Mandatory)]
-#        [ValidateSet(”Delta”,“Epsilon”,"Production","Infrastructure")]
+#        [ValidateSet("�Delta"�,"Epsilon"�,"Production","Infrastructure")]
 #        [ValidateScript({$_ -in $(Get-TervisEnvironmentName) })]
+        
+        [Parameter(Mandatory)]
         [String]$EnvironmentName
     )
     process{
         $ServerPoolID = "0004fb000002000029e778af2539d7ca"
-        $VMTemplate = Get-OVMVirtualMachines -Name $TervisApplicationDefinition.$VMOperatingSystemTemplateName
+        $VMTemplate = Get-OVMVirtualMachines -Name $VMOperatingSystemTemplateName
         $VMTemplateId = $VMTemplate.id.value
-        $VMName = Get-TervisVMName -VMNameWithoutEnvironmentPrefix $VMNameWithoutEnvironmentPrefix
+        $VMName = Get-TervisVMName -VMNameWithoutEnvironmentPrefix $VMNameWithoutEnvironmentPrefix -Environmentname $EnvironmentName
         
         $URIPath = "/Vm/$VMTemplateID/clone?serverPoolId=$ServerPoolID&createTemplate=false"
         
@@ -140,8 +142,10 @@ function New-OVMVirtualMachineClone {
         $CloneJob = Invoke-OracleVMManagerAPICall -Method PUT -URIPath $URIPath
         $CompletedCloneJob = Get-OVMJob -JobID $CloneJob.id.value -WaitToComplete
         $ClonedVirtualMachine = Get-OVMVirtualMachines -ID $CompletedCloneJob.resultId.value    
-        Rename-OVMVirtualMachine -VMID $clonedvirtualmachine.id.value -NewName $VMName
-        $ClonedVirtualMachine
+#        Get-OVMJob -JobID ((Rename-OVMVirtualMachine -VMID $clonedvirtualmachine.id.value -NewName $VMName).id.value)
+        (Rename-OVMVirtualMachine -VMID $clonedvirtualmachine.id.value -NewName $VMName).id.value | Out-Null
+        $FinalVM = Get-OVMVirtualMachines -ID $ClonedVirtualMachine.id.value
+        $FinalVM
     }
 }
 
