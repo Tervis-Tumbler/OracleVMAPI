@@ -206,46 +206,59 @@ function Rename-OVMVirtualMachine {
 }
 
 function Remove-OVMVirtualMachine {
+    [CmdletBinding(
+        SupportsShouldProcess,
+        ConfirmImpact="High"
+    )]
     param(
-        [parameter(mandatory)]$VMID,
+#        [parameter(mandatory)]$VMID,
+        [parameter(Mandatory, ValueFromPipeline)]$VM,
         [switch]$DeleteVirtualDisks,
         [switch]$ASync
         
     )
-    $VM = Get-OVMVirtualMachines -ID $VMID
+    $VM = Get-OVMVirtualMachines -ID $VM.ID.value
     $VirtualDisks = $VM.vmDiskMappingIds.value | %{Get-OVMVirtualDisk -VMDiskMappingID $_}
-    $ResultantJob = Invoke-OracleVMManagerAPICall -Method DELETE -URIPath "/Vm/$VMID"
-    if(-not $ASync){
-        do{
-            Start-Sleep 1
-            $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
-        }while($ResultantJob.done -eq $false)
-    }
+    if ($PSCmdlet.ShouldProcess($VM.Name)){
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method DELETE -URIPath "/Vm/$($VM.ID.value)"
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)
+        }   
+    }   
     if($DeleteVirtualDisks){
-        $VirtualDisks | %{$ResultantJob = Remove-OVMVirtualDisk -VirtualDiskID $_.id.value -RepositoryID $_.repositoryid.value
-            if(-not $ASync){
-                do{
-                    Start-Sleep 1
-                    $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
-                }while($ResultantJob.done -eq $false)
+            $VirtualDisks | %{$ResultantJob = Remove-OVMVirtualDisk -VirtualDiskID $_.id.value -RepositoryID $_.repositoryid.value
+                if(-not $ASync){
+                    do{
+                        Start-Sleep 1
+                        $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+                    }while($ResultantJob.done -eq $false)
+                }
             }
-        }
     }
 }
 
 function Remove-OVMVirtualDisk {
+    [CmdletBinding(
+        SupportsShouldProcess,
+        ConfirmImpact="High"
+    )]
     param(
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$VirtualDiskID,
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$RepositoryID,
         [switch]$ASync
     )
-    $ResultantJob = Invoke-OracleVMManagerAPICall -Method DELETE -URIPath "/Repository/$RepositoryID/VirtualDisk/$VirtualDiskId"
-    if(-not $ASync){
-        do{
-            Start-Sleep 1
-            $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
-        }while($ResultantJob.done -eq $false)
-    }
+    if ($PSCmdlet.ShouldProcess($VirtualDiskID)){
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method DELETE -URIPath "/Repository/$RepositoryID/VirtualDisk/$VirtualDiskId"
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)
+        }
+    }   
     $ResultantJob
 }
 
