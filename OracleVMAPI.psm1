@@ -412,3 +412,24 @@ function Get-OVMManagerStatus {
     $Result = Invoke-OracleVMManagerAPICall -Method GET -URIPath "/Manager" 
     $Result | select Name,managerRunState,locked
 }
+
+function Set-OVMVirtualMachineCPUPinning {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$CPUs,
+        [switch]$ASync
+    )
+    process{
+        $VM = Get-OVMVirtualMachines -ID $VMID
+        $VM.pinnedCPUs = $CPUs
+        $RenameJSON = $VM | ConvertTo-Json
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $RenameJSON
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        $ResultantJob
+    }
+}
