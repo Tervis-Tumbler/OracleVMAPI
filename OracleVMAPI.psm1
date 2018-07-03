@@ -460,3 +460,49 @@ function Set-OVMVirtualMachineCPUPinning {
         Invoke-SSHCommand -SSHSession $SshSession -Command $SSHCommand
     }
 }
+function Set-OVMVirtualMachineResourcesCPU {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$CPUCount,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$CPUCountLimit,
+        [switch]$ASync
+    )
+    process{
+        $VM = Get-OVMVirtualMachines -ID $VMID
+        $VM.cpuCount = $CPUCount
+        $VM.cpuCountLimit = $CPUCountLimit
+        $VMUpdateJSON = $VM | ConvertTo-Json
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $VMUpdateJSON
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        else{$ResultantJob}
+    }
+}
+
+function Set-OVMVirtualMachineResourcesMemory {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$Memory,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$MemoryLimit,
+        [switch]$ASync
+    )
+    process{
+        $VM = Get-OVMVirtualMachines -ID $VMID
+        $VM.memory = $Memory
+        $VM.memoryLimit = $MemoryLimit
+        $VMUpdateJSON = $VM | ConvertTo-Json
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $VMUpdateJSON
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        else{$ResultantJob}
+    }
+}
+
