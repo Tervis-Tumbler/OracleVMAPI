@@ -5,7 +5,7 @@ function Invoke-OracleVMManagerAPICall{
         $InputJSON
     )
     begin{
-        $OVMManagerPasswordstateEntryDetails = Get-PasswordstateEntryDetails -PasswordID 4157
+        $OVMManagerPasswordstateEntryDetails = Get-PasswordstatePassword -ID 4157
         $username = $OVMManagerPasswordstateEntryDetails.Username
         $password = $OVMManagerPasswordstateEntryDetails.Password
         $URL = "https://" + ([System.Uri]$OVMManagerPasswordstateEntryDetails.url).Authority + "/ovm/core/wsapi/rest" + $URIPath
@@ -320,7 +320,7 @@ function New-OVMVirtualMachineConsole {
     }
 
     process{
-        $OVMManagerPasswordstateEntryDetails = Get-PasswordstateEntryDetails -PasswordID 4157
+        $OVMManagerPasswordstateEntryDetails = Get-PasswordstatePassword -ID 4157
         $VM = Get-OVMVirtualMachines -Name $Name
         $ConsoleURLPath = Invoke-OracleVMManagerAPICall -Method GET `
         -URIPath "/Vm/$($VM.id.value)/vmConsoleUrl"
