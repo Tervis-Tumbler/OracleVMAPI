@@ -460,6 +460,30 @@ function Set-OVMVirtualMachineCPUPinning {
         Invoke-SSHCommand -SSHSession $SshSession -Command $SSHCommand
     }
 }
+
+function Move-OVMVirtualMachine{
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$DestinationComputer,
+        [switch]$ASync
+    )
+    process{
+        $VM = Get-OVMVirtualMachines -ID $VMID
+        $VM.pinnedCPUs = $CPUs
+        $VMUpdateJSON = $VM | ConvertTo-Json
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $VMUpdateJSON
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        else{$ResultantJob}
+        $SSHCommand = "xm vcpu-pin $VMID all $CPUs"
+        Invoke-SSHCommand -SSHSession $SshSession -Command $SSHCommand
+    }
+}
+
 function Set-OVMVirtualMachineResourcesCPU {
     param(
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
