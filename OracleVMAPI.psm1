@@ -280,19 +280,25 @@ function Start-OVMVirtualMachine {
 }
 
 function Stop-OVMVirtualMachine {
+    [CmdletBinding(
+        SupportsShouldProcess,
+        ConfirmImpact="High"
+    )]
     param(
         [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="Name")]$Name,
         [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
     )
     process{
-        if ($ID){
-            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$VMID/stop"
+        if ($PSCmdlet.ShouldProcess($Name)){
+            if ($ID){
+                $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$VMID/stop"
+            }
+            Elseif($Name){
+                $VM = Get-OVMVirtualMachines | where name -eq $Name
+                $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/stop"
+            }
+            Get-OVMJob -JobID $Job.id.value -WaitToComplete
         }
-        Elseif($Name){
-            $VM = Get-OVMVirtualMachines | where name -eq $Name
-            $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/stop"
-        }
-        Get-OVMJob -JobID $Job.id.value -WaitToComplete
     }
 }
 
