@@ -513,6 +513,35 @@ function Set-OVMVirtualMachineResourcesCPU {
     }
 }
 
+
+function Restart-OVMVirtualMachine {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="Name")]$Name,
+        [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
+    )
+    process{
+        if ($ID){
+            Stop-OVMVirtualMachine -ID $ID
+            $VM = Get-OVMVirtualMachines -ID $ID
+        }
+        Elseif($Name){
+            Stop-OVMVirtualMachine -Name $Name
+            $VM = Get-OVMVirtualMachines -Name $Name
+        }
+        do{
+            $VMStatus = Get-OVMVirtualMachines -ID $VM.id.value
+            Write-Progress -Activity $VMStatus.id.name -status $VMStatus.vmrunstate
+            Start-Sleep 5
+        }while($VMStatus.vmRunState -ne "Stopped")
+        Start-Sleep 5
+        Start-OVMVirtualMachine -ID $VM.id.value
+        do{
+            
+            Start-Sleep 5
+        }while((Test-NetConnection -ComputerName $VM.id.name -Port 22).TcpTestSucceeded -eq $false)
+
+    }
+}
 function Set-OVMVirtualMachineResourcesMemory {
     param(
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
