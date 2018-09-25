@@ -289,16 +289,18 @@ function Stop-OVMVirtualMachine {
         [parameter(ValueFromPipelineByPropertyName,Mandatory,ParameterSetName="ID")]$ID
     )
     process{
-        if ($PSCmdlet.ShouldProcess($Name)){
             if ($ID){
-                $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$VMID/stop"
+                if ($PSCmdlet.ShouldProcess($ID)){
+                    $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$ID/stop"
+                }
             }
             Elseif($Name){
-                $VM = Get-OVMVirtualMachines | where name -eq $Name
-                $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/stop"
+                if ($PSCmdlet.ShouldProcess($Name)){
+                    $VM = Get-OVMVirtualMachines | where name -eq $Name
+                    $Job = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.id.value)/stop"
+                }
             }
             Get-OVMJob -JobID $Job.id.value -WaitToComplete
-        }
     }
 }
 
@@ -423,33 +425,10 @@ function Set-OVMVirtualMachineCPUPinning {
     param(
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$CPUs,
-        [switch]$ASync
-    )
-    process{
-        $VM = Get-OVMVirtualMachines -ID $VMID
-        $VM.pinnedCPUs = $CPUs
-        $RenameJSON = $VM | ConvertTo-Json
-        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $RenameJSON
-        if(-not $ASync){
-            do{
-                Start-Sleep 1
-                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
-            }while($ResultantJob.done -eq $false)    
-        }
-        $ResultantJob
-
-        
-
-    }
-}
-
-function Set-OVMVirtualMachineCPUPinning {
-    param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$CPUs,
         [parameter(ValueFromPipelineByPropertyName,mandatory)]$SSHSession,
         [switch]$ASync
     )
+    
     process{
         $VM = Get-OVMVirtualMachines -ID $VMID
         $VM.pinnedCPUs = $CPUs
@@ -513,6 +492,29 @@ function Set-OVMVirtualMachineResourcesCPU {
     }
 }
 
+function Set-OVMVirtualMachineResourcesMemory {
+    param(
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$Memory,
+        [parameter(ValueFromPipelineByPropertyName,mandatory)]$MemoryLimit,
+        [switch]$ASync
+    )
+    process{
+        $VM = Get-OVMVirtualMachines -ID $VMID
+        $VM.memory = $Memory
+        $VM.memoryLimit = $MemoryLimit
+        $VMUpdateJSON = $VM | ConvertTo-Json
+        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $VMUpdateJSON
+        if(-not $ASync){
+            do{
+                Start-Sleep 1
+                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
+            }while($ResultantJob.done -eq $false)    
+        }
+        else{$ResultantJob}
+    }
+}
+
 
 function Restart-OVMVirtualMachine {
     param(
@@ -542,26 +544,3 @@ function Restart-OVMVirtualMachine {
 
     }
 }
-function Set-OVMVirtualMachineResourcesMemory {
-    param(
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$VMID,
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$Memory,
-        [parameter(ValueFromPipelineByPropertyName,mandatory)]$MemoryLimit,
-        [switch]$ASync
-    )
-    process{
-        $VM = Get-OVMVirtualMachines -ID $VMID
-        $VM.memory = $Memory
-        $VM.memoryLimit = $MemoryLimit
-        $VMUpdateJSON = $VM | ConvertTo-Json
-        $ResultantJob = Invoke-OracleVMManagerAPICall -Method put -URIPath "/Vm/$($VM.ID.Value)" -InputJSON $VMUpdateJSON
-        if(-not $ASync){
-            do{
-                Start-Sleep 1
-                $ResultantJob = Get-OVMJob -JobID $ResultantJob.id.value
-            }while($ResultantJob.done -eq $false)    
-        }
-        else{$ResultantJob}
-    }
-}
-
